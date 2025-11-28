@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tối ưu hóa lộ trình du lịch - Thuật toán nhánh cận</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: none;
+            border-radius: 10px;
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            border: none;
+        }
+        .btn-success {
+            background: linear-gradient(45deg, #28a745, #1e7e34);
+            border: none;
+        }
+        .result-card {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        }
+        .loading {
+            display: none;
+        }
+        .city-input {
+            margin-bottom: 10px;
+        }
+        .distance-input {
+            margin-bottom: 10px;
+        }
+        .file-upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .file-upload-area:hover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        .file-upload-area.dragover {
+            border-color: #007bff;
+            background-color: #e3f2fd;
+        }
+        .route-graph-node {
+            fill: #0d6efd;
+        }
+        .edge-all {
+            stroke: #ced4da;
+            stroke-width: 2;
+        }
+        .edge-route {
+            stroke: #198754;
+            stroke-width: 4;
+        }
+        .edge-route-active {
+            stroke: #dc3545;
+            stroke-width: 5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-center mb-4">
+                    <i class="fas fa-route text-primary"></i>
+                    Tối ưu hóa lộ trình du lịch
+                </h1>
+                <p class="text-center text-muted mb-5">
+                    Sử dụng thuật toán nhánh cận để tìm lộ trình ngắn nhất
+                </p>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Panel nhập dữ liệu -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-map-marked-alt"></i>
+                            Nhập dữ liệu lộ trình
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Tab navigation -->
+                        <ul class="nav nav-tabs" id="dataInputTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="manual-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#manual" type="button" role="tab">
+                                    <i class="fas fa-keyboard"></i> Nhập thủ công
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="upload-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#upload" type="button" role="tab">
+                                    <i class="fas fa-upload"></i> Upload file
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="sample-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#sample" type="button" role="tab">
+                                    <i class="fas fa-database"></i> Dữ liệu mẫu
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- Tab content -->
+                        <div class="tab-content mt-3" id="dataInputTabsContent">
+                            <!-- Manual input tab -->
+                            <div class="tab-pane fade show active" id="manual" role="tabpanel">
+                                <div class="mb-3">
+                                    <label class="form-label">Thành phố:</label>
+                                    <div id="cities-container">
+                                        <div class="input-group city-input">
+                                            <input type="text" class="form-control" placeholder="Tên thành phố">
+                                            <button class="btn btn-outline-danger" type="button" onclick="removeCityInput(this)">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-outline-primary btn-sm mt-2" onclick="addCityInput()">
+                                        <i class="fas fa-plus"></i> Thêm thành phố
+                                    </button>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Khoảng cách giữa các thành phố:</label>
+                                    <div id="distances-container">
+                                        <!-- Sẽ được tạo động -->
+                                    </div>
+                                    <button class="btn btn-outline-primary btn-sm mt-2" onclick="addDistanceInput()">
+                                        <i class="fas fa-plus"></i> Thêm khoảng cách
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Upload file tab -->
+                            <div class="tab-pane fade" id="upload" role="tabpanel">
+                                <div class="file-upload-area" id="file-upload-area">
+                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                    <h5>Kéo thả file vào đây hoặc click để chọn</h5>
+                                    <p class="text-muted">Hỗ trợ file CSV và JSON</p>
+                                    <input type="file" id="file-input" accept=".csv,.json" style="display: none;">
+                                    <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
+                                        <i class="fas fa-folder-open"></i> Chọn file
+                                    </button>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <h6>Định dạng file CSV:</h6>
+                                    <pre class="bg-light p-2 rounded"><code>city
+Hà Nội
+TP. Hồ Chí Minh
+Đà Nẵng
+
+from,to,distance
+Hà Nội,TP. Hồ Chí Minh,1726
+Hà Nội,Đà Nẵng,764
+TP. Hồ Chí Minh,Đà Nẵng,441</code></pre>
+                                </div>
+
+                                <div class="mt-3">
+                                    <h6>Định dạng file JSON:</h6>
+                                    <pre class="bg-light p-2 rounded"><code>{
+  "cities": [
+    {"name": "Hà Nội"},
+    {"name": "TP. Hồ Chí Minh"}
+  ],
+  "distances": [
+    {"from": "Hà Nội", "to": "TP. Hồ Chí Minh", "weight": 1726}
+  ]
+}</code></pre>
+                                </div>
+                            </div>
+
+                            <!-- Sample data tab -->
+                            <div class="tab-pane fade" id="sample" role="tabpanel">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    Dữ liệu mẫu về các thành phố Việt Nam với khoảng cách thực tế.
+                                </div>
+                                <button class="btn btn-success" onclick="loadSampleData()">
+                                    <i class="fas fa-download"></i> Tải dữ liệu mẫu
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <label class="form-label">
+                                <i class="fas fa-map-marker-alt"></i> Chọn thành phố xuất phát:
+                            </label>
+                            <select id="start-city-select" class="form-select mb-3">
+                                <option value="">Tự động (thành phố đầu tiên)</option>
+                            </select>
+                        </div>
+
+                        <div class="mt-3">
+                            <button class="btn btn-primary btn-lg w-100" onclick="solveTSP()">
+                                <i class="fas fa-calculator"></i>
+                                Tìm lộ trình tối ưu
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel kết quả -->
+            <div class="col-lg-6">
+                <div class="card result-card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-route"></i>
+                            Kết quả tối ưu hóa
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="loading" class="loading text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Đang xử lý...</span>
+                            </div>
+                            <p class="mt-2">Đang tính toán lộ trình tối ưu...</p>
+                        </div>
+
+                        <div id="result-content">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-route fa-3x mb-3"></i>
+                                <p>Nhập dữ liệu và nhấn "Tìm lộ trình tối ưu" để bắt đầu</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sơ đồ lộ trình lớn -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-project-diagram"></i>
+                            Sơ đồ lộ trình & mô phỏng
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <svg id="main-graph" width="100%" height="600"></svg>
+                        <div class="mt-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <button class="btn btn-outline-primary btn-sm me-2" type="button" onclick="updateMainGraph()">
+                                    <i class="fas fa-sync"></i> Cập nhật sơ đồ
+                                </button>
+                                <button class="btn btn-outline-success btn-sm me-2" type="button" onclick="startSimulation()">
+                                    <i class="fas fa-play"></i> Chạy mô phỏng
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="stopSimulation()">
+                                    <i class="fas fa-stop"></i> Dừng
+                                </button>
+                            </div>
+                            <small class="text-muted">Sơ đồ hiển thị tất cả kết nối và lộ trình tối ưu (nếu có)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let cities = [];
+        let distances = [];
+        let inputCities = [];  // Lưu danh sách thành phố từ input
+        let inputDistances = [];  // Lưu danh sách khoảng cách từ input
+
+        // File upload handling
+        const fileUploadArea = document.getElementById('file-upload-area');
+        const fileInput = document.getElementById('file-input');
+
+        fileUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUploadArea.classList.add('dragover');
+        });
+
+        fileUploadArea.addEventListener('dragleave', () => {
+            fileUploadArea.classList.remove('dragover');
+        });
+
+        fileUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileUpload(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+
+        function handleFileUpload(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    cities = data.cities;
+                    distances = data.distances;
+                    inputCities = data.cities;
+                    inputDistances = data.distances;
+                    populateManualInputs();
+                    updateMainGraph();
+                    showAlert('success', 'File đã được tải thành công!');
+                } else {
+                    showAlert('danger', 'Lỗi: ' + data.error);
+                }
+            })
+            .catch(error => {
+                showAlert('danger', 'Lỗi khi tải file: ' + error);
+            });
+        }
+
+        function addCityInput() {
+            const container = document.getElementById('cities-container');
+            const div = document.createElement('div');
+            div.className = 'input-group city-input';
+            div.innerHTML = `
+                <input type="text" class="form-control" placeholder="Tên thành phố" oninput="updateMainGraph()">
+                <button class="btn btn-outline-danger" type="button" onclick="removeCityInput(this)">
+                    <i class="fas fa-trash"></i>
+                </button>
+            `;
+            container.appendChild(div);
+            updateDistanceSelects();
+            updateMainGraph();
+        }
+
+        function removeCityInput(button) {
+            button.parentElement.remove();
+            updateDistanceSelects();
+            updateMainGraph();
+        }
+
+        function addDistanceInput() {
+            const container = document.getElementById('distances-container');
+            const div = document.createElement('div');
+            div.className = 'row distance-input';
+            div.innerHTML = `
+                <div class="col-md-4">
+                    <select class="form-select from-select" onchange="updateMainGraph()">
+                        <option value="">Chọn thành phố đi</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <select class="form-select to-select" onchange="updateMainGraph()">
+                        <option value="">Chọn thành phố đến</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="number" class="form-control" placeholder="Khoảng cách (km)" oninput="updateMainGraph()">
+                </div>
+                <div class="col-md-1">
+                    <button class="btn btn-outline-danger" type="button" onclick="removeDistanceInput(this)">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            container.appendChild(div);
+            updateDistanceSelects();
+            updateMainGraph();
+        }
+
+        function removeDistanceInput(button) {
+            button.parentElement.parentElement.remove();
+            updateMainGraph();
+        }
+
+        function updateStartCitySelect() {
+            const cityInputs = document.querySelectorAll('#cities-container input[type="text"]');
+            const cities = Array.from(cityInputs).map(input => input.value.trim()).filter(name => name);
+            
+            const startCitySelect = document.getElementById('start-city-select');
+            const currentValue = startCitySelect.value;
+            
+            // Cập nhật dropdown
+            startCitySelect.innerHTML = '<option value="">Tự động (thành phố đầu tiên)</option>';
+            cities.forEach(city => {
+                const option = document.createElement('option');
+                option.value = city;
+                option.textContent = city;
+                startCitySelect.appendChild(option);
+            });
+            
+            // Giữ lại giá trị đã chọn nếu còn tồn tại
+            if (cities.includes(currentValue)) {
+                startCitySelect.value = currentValue;
+            }
+        }
+
+        function updateDistanceSelects() {
+            const cityInputs = document.querySelectorAll('#cities-container input[type="text"]');
+            const cities = Array.from(cityInputs).map(input => input.value).filter(name => name.trim());
+            
+            // Cập nhật dropdown thành phố xuất phát
+            updateStartCitySelect();
+            
+            // Thêm event listener cho các input thành phố nếu chưa có
+            cityInputs.forEach(input => {
+                if (!input.hasAttribute('data-has-listener')) {
+                    input.setAttribute('data-has-listener', 'true');
+                    input.addEventListener('input', updateMainGraph);
+                }
+            });
+            
+            // Thêm event listener cho các select và input khoảng cách nếu chưa có
+            const selects = document.querySelectorAll('.from-select, .to-select');
+            selects.forEach(select => {
+                if (!select.hasAttribute('data-has-listener')) {
+                    select.setAttribute('data-has-listener', 'true');
+                    select.addEventListener('change', updateMainGraph);
+                }
+                const currentValue = select.value;
+                select.innerHTML = '<option value="">Chọn thành phố</option>';
+                cities.forEach(city => {
+                    const option = document.createElement('option');
+                    option.value = city;
+                    option.textContent = city;
+                    select.appendChild(option);
+                });
+                select.value = currentValue;
+            });
+            
+            // Thêm event listener cho các input khoảng cách
+            const distanceNumberInputs = document.querySelectorAll('.distance-input input[type="number"]');
+            distanceNumberInputs.forEach(input => {
+                if (!input.hasAttribute('data-has-listener')) {
+                    input.setAttribute('data-has-listener', 'true');
+                    input.addEventListener('input', updateMainGraph);
+                }
+            });
+        }
+
+        function populateManualInputs() {
+            // Clear existing inputs
+            document.getElementById('cities-container').innerHTML = '';
+            document.getElementById('distances-container').innerHTML = '';
+
+            // Add cities
+            cities.forEach(city => {
+                addCityInput();
+                const inputs = document.querySelectorAll('#cities-container input[type="text"]');
+                inputs[inputs.length - 1].value = city.name;
+            });
+
+            // Add distances
+            distances.forEach(distance => {
+                addDistanceInput();
+                const distanceInputs = document.querySelectorAll('.distance-input');
+                const lastInput = distanceInputs[distanceInputs.length - 1];
+                lastInput.querySelector('.from-select').value = distance.from;
+                lastInput.querySelector('.to-select').value = distance.to;
+                lastInput.querySelector('input[type="number"]').value = distance.weight;
+            });
+
+            // Cập nhật dropdown thành phố xuất phát
+            updateStartCitySelect();
+            
+            // Cập nhật sơ đồ sau khi populate
+            setTimeout(() => updateMainGraph(), 100);
+        }
+
+        function loadSampleData() {
+            fetch('/api/sample-data')
+            .then(response => response.json())
+            .then(data => {
+                cities = data.cities;
+                distances = data.distances;
+                inputCities = data.cities;
+                inputDistances = data.distances;
+                populateManualInputs();
+                updateMainGraph();
+                showAlert('success', 'Dữ liệu mẫu đã được tải!');
+            })
+            .catch(error => {
+                showAlert('danger', 'Lỗi khi tải dữ liệu mẫu: ' + error);
+            });
+        }
+
+        function solveTSP() {
+            // Collect data from manual input
+            const cityInputs = document.querySelectorAll('#cities-container input[type="text"]');
+            const cities = Array.from(cityInputs)
+                .map(input => input.value.trim())
+                .filter(name => name);
+
+            if (cities.length < 2) {
+                showAlert('warning', 'Cần ít nhất 2 thành phố để tính toán!');
+                return;
+            }
+
+            const distanceInputs = document.querySelectorAll('.distance-input');
+            const distances = Array.from(distanceInputs)
+                .map(input => {
+                    const from = input.querySelector('.from-select').value;
+                    const to = input.querySelector('.to-select').value;
+                    const weight = parseFloat(input.querySelector('input[type="number"]').value);
+                    return { from, to, weight };
+                })
+                .filter(d => d.from && d.to && !isNaN(d.weight));
+
+            if (distances.length === 0) {
+                showAlert('warning', 'Cần nhập ít nhất một khoảng cách!');
+                return;
+            }
+
+            // Lấy thành phố xuất phát
+            const startCity = document.getElementById('start-city-select').value || null;
+
+            // Lưu dữ liệu đầu vào để vẽ sơ đồ
+            inputCities = cities.map(name => ({ name }));
+            inputDistances = distances;
+
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result-content').innerHTML = '';
+
+            // Send request
+            fetch('/api/solve', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    cities: cities.map(name => ({ name })),
+                    distances: distances,
+                    start_city: startCity
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                
+                if (data.success) {
+                    displayResult(data);
+                } else {
+                    showAlert('danger', 'Lỗi: ' + data.error);
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading').style.display = 'none';
+                showAlert('danger', 'Lỗi khi tính toán: ' + error);
+            });
+        }
+
+        function displayResult(data) {
+            const resultContent = document.getElementById('result-content');
+            window.lastResult = data;
+
+            // Hiển thị lộ trình đóng vòng: A → C → D → B → A
+            const displayRoute = (data.route && data.route.length > 0)
+                ? [...data.route, data.route[0]]
+                : [];
+
+            let routeHtml = '';
+            displayRoute.forEach((city, index) => {
+                if (index > 0) routeHtml += ' → ';
+                routeHtml += `<span class="badge bg-primary">${city}</span>`;
+            });
+
+            // Bảng chi tiết các chặng đi
+            let stepsHtml = '';
+            if (data.steps && data.steps.length > 0) {
+                stepsHtml = `
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Từ</th>
+                                <th>Đến</th>
+                                <th>Khoảng cách (km)</th>
+                                <th>Tổng lũy kế (km)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.steps.map((step, idx) => `
+                                <tr>
+                                    <td>${idx + 1}</td>
+                                    <td>${step.from}</td>
+                                    <td>${step.to}</td>
+                                    <td>${step.distance.toFixed(2)}</td>
+                                    <td>${step.cumulative.toFixed(2)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            }
+
+            resultContent.innerHTML = `
+                <div class="alert alert-success">
+                    <h6><i class="fas fa-check-circle"></i> Lộ trình tối ưu đã được tìm thấy!</h6>
+                    ${data.start_city ? `<p class="mb-0"><i class="fas fa-map-marker-alt"></i> Xuất phát từ: <strong>${data.start_city}</strong></p>` : ''}
+                </div>
+                
+                <div class="mb-3">
+                    <h6><i class="fas fa-route"></i> Lộ trình:</h6>
+                    <div class="p-3 bg-light rounded">
+                        ${routeHtml}
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="fas fa-road"></i></h5>
+                                <h4>${data.total_distance.toFixed(2)} km</h4>
+                                <small>Tổng khoảng cách</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mt-3 mt-md-0">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="fas fa-clock"></i></h5>
+                                <h4>${(data.execution_time * 1000).toFixed(2)} ms</h4>
+                                <small>Thời gian xử lý</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <button class="btn btn-outline-secondary btn-sm" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#detailCollapse">
+                        <i class="fas fa-list"></i> Xem chi tiết quy trình tính toán
+                    </button>
+                </div>
+
+                <div class="collapse mt-3" id="detailCollapse">
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6><i class="fas fa-info-circle"></i> Thông tin chi tiết</h6>
+                            <p class="mb-1">
+                                <strong>Số nút nhánh cận đã duyệt:</strong>
+                                ${data.nodes_explored ?? 'Không rõ'}
+                            </p>
+                            <p class="text-muted small">
+                                Mỗi nút biểu diễn một trạng thái trung gian trong cây tìm kiếm
+                                của thuật toán nhánh cận.
+                            </p>
+                            ${stepsHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            drawMainGraph(data);
+        }
+
+        // =================== Vẽ sơ đồ & mô phỏng ===================
+        let simTimer = null;
+        let simIndex = 0;
+
+        // Hàm vẽ sơ đồ từ dữ liệu đầu vào (có thể gọi trước khi tính toán)
+        function drawGraphFromInput(svgId, citiesData, distancesData, routeData = null) {
+            const svg = document.getElementById(svgId);
+            if (!svg) return;
+
+            if (!citiesData || citiesData.length === 0) {
+                svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#999">Chưa có dữ liệu</text>';
+                return;
+            }
+
+            const width = svg.clientWidth || 800;
+            const height = svg.clientHeight || 600;
+            const cx = width / 2;
+            const cy = height / 2;
+            const radius = Math.min(width, height) / 2 - 80;
+
+            // Lấy danh sách thành phố duy nhất từ cả citiesData và distancesData
+            const cityNames = citiesData.map(c => c.name);
+            if (distancesData && distancesData.length > 0) {
+                distancesData.forEach(d => {
+                    if (d.from) cityNames.push(d.from);
+                    if (d.to) cityNames.push(d.to);
+                });
+            }
+            const uniqueCities = Array.from(new Set(cityNames)).filter(c => c);
+            
+            // Tạo map vị trí cho các thành phố
+            const positions = {};
+            uniqueCities.forEach((city, idx) => {
+                const angle = (2 * Math.PI * idx) / uniqueCities.length - Math.PI / 2;
+                const x = cx + radius * Math.cos(angle);
+                const y = cy + radius * Math.sin(angle);
+                positions[city] = { x, y };
+            });
+
+            // Tạo map thứ tự cho các thành phố (nếu có route)
+            const orderMap = {};
+            if (routeData && routeData.length > 0) {
+                routeData.forEach((city, idx) => {
+                    orderMap[city] = idx + 1;
+                });
+            } else {
+                uniqueCities.forEach((city, idx) => {
+                    orderMap[city] = idx + 1;
+                });
+            }
+
+            // Tạo set các cạnh đã vẽ để tránh vẽ trùng (đồ thị vô hướng)
+            const drawnEdges = new Set();
+            let allEdgesSvg = '';
+            let edgeLabelsSvg = '';
+
+            // Vẽ tất cả các cạnh từ dữ liệu đầu vào (chính xác 100%)
+            if (distancesData && distancesData.length > 0) {
+                distancesData.forEach((d) => {
+                    if (!d.from || !d.to) return;
+                    
+                    const edgeKey1 = `${d.from}-${d.to}`;
+                    const edgeKey2 = `${d.to}-${d.from}`;
+                    
+                    // Chỉ vẽ nếu chưa vẽ (tránh vẽ trùng cho đồ thị vô hướng)
+                    if (!drawnEdges.has(edgeKey1) && !drawnEdges.has(edgeKey2)) {
+                        const p1 = positions[d.from];
+                        const p2 = positions[d.to];
+                        if (p1 && p2) {
+                            allEdgesSvg += `
+                                <line class="edge-all"
+                                      x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"></line>
+                            `;
+                            
+                            // Thêm nhãn khoảng cách ở giữa cạnh
+                            const midX = (p1.x + p2.x) / 2;
+                            const midY = (p1.y + p2.y) / 2;
+                            const labelText = d.weight ? d.weight.toFixed(0) : '';
+                            edgeLabelsSvg += `
+                                <g>
+                                    <rect x="${midX - 18}" y="${midY - 10}" width="36" height="20" 
+                                          fill="white" stroke="#ced4da" stroke-width="1" rx="3"/>
+                                    <text x="${midX}" y="${midY + 4}" text-anchor="middle" 
+                                          font-size="11" font-weight="bold" fill="#495057">${labelText}</text>
+                                </g>
+                            `;
+                            
+                            drawnEdges.add(edgeKey1);
+                            drawnEdges.add(edgeKey2);
+                        }
+                    }
+                });
+            }
+
+            // Vẽ các cạnh thuộc lộ trình tối ưu (nếu có)
+            let routeEdgesSvg = '';
+            let routeLabelsSvg = '';
+            if (routeData && routeData.length > 0 && window.lastResult && window.lastResult.steps) {
+                window.lastResult.steps.forEach((step, idx) => {
+                    const p1 = positions[step.from];
+                    const p2 = positions[step.to];
+                    if (p1 && p2) {
+                        routeEdgesSvg += `
+                            <line id="route-edge-${idx}" class="edge-route"
+                                  x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"></line>
+                        `;
+                        
+                        // Thêm nhãn khoảng cách cho lộ trình (màu xanh lá nổi bật)
+                        const midX = (p1.x + p2.x) / 2;
+                        const midY = (p1.y + p2.y) / 2;
+                        const labelText = step.distance ? step.distance.toFixed(0) : '';
+                        routeLabelsSvg += `
+                            <g>
+                                <rect x="${midX - 20}" y="${midY - 12}" width="40" height="24" 
+                                      fill="#198754" stroke="#198754" stroke-width="2" rx="4"/>
+                                <text x="${midX}" y="${midY + 5}" text-anchor="middle" 
+                                      font-size="12" font-weight="bold" fill="white">${labelText}</text>
+                            </g>
+                        `;
+                    }
+                });
+            }
+
+            // Vẽ các nút (thành phố)
+            let nodesSvg = '';
+            uniqueCities.forEach(city => {
+                const p = positions[city];
+                const label = orderMap[city] ? `${orderMap[city]}.${city}` : city;
+                nodesSvg += `
+                    <g>
+                        <circle class="route-graph-node" cx="${p.x}" cy="${p.y}" r="20"></circle>
+                        <text class="route-graph-label" x="${p.x}" y="${p.y + 5}" text-anchor="middle" 
+                              font-size="13" font-weight="bold" fill="white">${label}</text>
+                    </g>
+                `;
+            });
+
+            svg.innerHTML = `
+                <g>${allEdgesSvg}${routeEdgesSvg}</g>
+                <g>${edgeLabelsSvg}${routeLabelsSvg}</g>
+                <g>${nodesSvg}</g>
+            `;
+        }
+
+        // Hàm cập nhật sơ đồ chính từ dữ liệu đầu vào
+        function updateMainGraph() {
+            // Lấy dữ liệu từ input
+            const cityInputs = document.querySelectorAll('#cities-container input[type="text"]');
+            const citiesFromInput = Array.from(cityInputs)
+                .map(input => input.value.trim())
+                .filter(name => name)
+                .map(name => ({ name }));
+
+            const distanceInputs = document.querySelectorAll('.distance-input');
+            const distancesFromInput = Array.from(distanceInputs)
+                .map(input => {
+                    const from = input.querySelector('.from-select').value;
+                    const to = input.querySelector('.to-select').value;
+                    const weight = parseFloat(input.querySelector('input[type="number"]').value);
+                    return { from, to, weight };
+                })
+                .filter(d => d.from && d.to && !isNaN(d.weight));
+
+            // Cập nhật biến global
+            inputCities = citiesFromInput;
+            inputDistances = distancesFromInput;
+
+            // Vẽ sơ đồ (không có route nếu chưa tính toán)
+            drawGraphFromInput('main-graph', inputCities, inputDistances, window.lastResult ? window.lastResult.route : null);
+        }
+
+        // Hàm vẽ sơ đồ kết quả (sau khi tính toán)
+        function drawMainGraph(data) {
+            drawGraphFromInput('main-graph', inputCities, inputDistances, data.route);
+        }
+
+        function startSimulation() {
+            if (!window.lastResult || !lastResult.steps || lastResult.steps.length === 0) return;
+            stopSimulation();
+            simIndex = 0;
+            highlightStep();
+            simTimer = setInterval(highlightStep, 800);
+        }
+
+        function stopSimulation() {
+            if (simTimer) {
+                clearInterval(simTimer);
+                simTimer = null;
+            }
+            document.querySelectorAll('#main-graph .edge-route-active').forEach(el => {
+                el.classList.remove('edge-route-active');
+            });
+        }
+
+        function highlightStep() {
+            const steps = lastResult.steps;
+            if (!steps || simIndex >= steps.length) {
+                stopSimulation();
+                return;
+            }
+            document.querySelectorAll('#main-graph .edge-route').forEach(el => {
+                el.classList.remove('edge-route-active');
+            });
+            const edge = document.getElementById(`route-edge-${simIndex}`);
+            if (edge) {
+                edge.classList.add('edge-route-active');
+            }
+            simIndex += 1;
+        }
+
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.container-fluid');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            addCityInput();
+            addDistanceInput();
+            // Cập nhật sơ đồ ban đầu
+            setTimeout(() => updateMainGraph(), 100);
+        });
+    </script>
+</body>
+</html>
